@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+data/
+models/
+sms-data.zip
+/visionguard/
+/VISIONGUARD_PROJECT_PLAN.md
+/reports/errors.csv
+*.pyc
+.pytest_cache/
+.env
