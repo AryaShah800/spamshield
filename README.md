@@ -31,10 +31,6 @@ The first training run downloads the public dataset. Subsequent runs use the loc
 
 `reports/metrics.json` contains measured results. `reports/errors.csv` supports qualitative error analysis. The model is saved to `models/spamshield.joblib`; load only artifacts you trust.
 
-## Why this is useful on a resume
-
-This demonstrates dataset cleaning, NLP feature extraction, imbalanced classification, baseline comparison, leakage prevention, model selection, reproducibility and inference. The strongest evidence is a reproducible experiment plus an explanation of its mistakes.
-
 ## Learning walkthrough
 
 1. Read `load_data()` and explain why duplicate messages crossing partitions inflate evaluation scores.
@@ -58,17 +54,11 @@ Source: https://archive.ics.uci.edu/dataset/228/sms+spam+collection
 
 Dataset license: CC BY 4.0. Downloaded raw data is kept out of Git. Do not treat benchmark messages as real contacts or redistribute personal details in demo screenshots.
 
-## Resume use
+## Results
 
-Use the measured results in `reports/metrics.json`, not invented numbers. Review and understand the implementation before presenting it as your work. Describe your own experiments and contributions accurately, including AI assistance if asked.
-
-### Verified first run
+### Held-out test results
 
 After deduplication, this experiment used 5,159 messages: 3,095 training, 1,032 validation and 1,032 test. Logistic regression won validation model selection. On the held-out test set it achieved **98.26% accuracy**, **91.67% spam precision**, **94.53% spam recall** and **93.08% spam F1**. There were 11 false positives and 7 false negatives. See the full metrics file for baseline comparisons and environment versions.
-
-Example resume bullet, after you can explain and reproduce the project:
-
-> Developed an SMS spam classification pipeline using TF-IDF and scikit-learn; compared a majority baseline, Naive Bayes and logistic regression, achieving 93.08% spam F1 on 1,032 held-out messages after deduplication.
 
 `requirements-lock.txt` records the installed packages from this run. To reproduce this environment, use `python -m pip --python .venv\Scripts\python.exe install -r requirements-lock.txt`.
 
@@ -77,3 +67,7 @@ Example resume bullet, after you can explain and reproduce the project:
 Run `python -m unittest discover -s tests -v`. The offline suite checks deduplication, conflicting labels, invalid input and the train/save/reload/predict workflow. GitHub Actions runs these checks on pushes and pull requests. Synthetic test fixtures are used only for software checks; reported benchmark metrics come from the UCI data.
 
 Raw data, local model artifacts and message-level error exports are excluded from Git. The aggregate benchmark report is included in `reports/metrics.json`.
+
+## License
+
+MIT. See [LICENSE](LICENSE). The UCI dataset is CC BY 4.0.
