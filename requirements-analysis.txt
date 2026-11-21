@@ -1,0 +1,1 @@
+matplotlib>=3.8  # only for scripts/error_analysis.py
