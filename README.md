@@ -43,7 +43,7 @@ The service's primary model is the **character 2-5-gram TF-IDF linear SVM with p
 - It is about 11x faster per message (4.0 ms vs 46 ms batch-1, indicative) and is a 1.4 MB scikit-learn file instead of a PyTorch stack.
 - It beats the original word-level logistic regression on F1 (0.956 vs 0.931) and by a wide margin on the obfuscation columns.
 
-The transformer stays as an optional second opinion: if `models/transformer` exists, `/predict` also returns its score. Caveats: these are one-seed, one-corpus (2011 English) results on a 1,032-message test set, and the obfuscations are fixed, non-adaptive tricks; the choice is evidence-based, not proof. The calibrated probabilities have not yet been checked on a reliability plot (planned in the error-analysis step).
+The transformer stays as an optional second opinion: if `models/transformer` exists, `/predict` also returns its score. Caveats: these are one-seed, one-corpus (2011 English) results on a 1,032-message test set, and the obfuscations are fixed, non-adaptive tricks; the choice is evidence-based, not proof. Calibration of these probabilities: ECE 0.0105, Brier 0.0074 ([`MODEL_CARD.md`](MODEL_CARD.md), [`reports/calibration.png`](reports/calibration.png)); the middle bins hold very few messages.
 
 ## Serving
 
@@ -120,3 +120,9 @@ Raw data, local model artifacts and message-level error exports are excluded fro
 ## License
 
 MIT. See [LICENSE](LICENSE). The UCI dataset is CC BY 4.0.
+
+## Error analysis, calibration and model card
+
+`python scripts/error_analysis.py` (needs `requirements-analysis.txt`) writes [`reports/error_analysis.md`](reports/error_analysis.md) (every false positive/negative with its score and a rough category), `reports/calibration.json` and `reports/calibration.png`. See [`MODEL_CARD.md`](MODEL_CARD.md) for scope, measured numbers and limits.
+
+![Calibration](reports/calibration.png)
