@@ -1,8 +1,66 @@
-# SpamShield — SMS Spam Classification
+# SpamShield: SMS spam detection, classical vs transformer, with robustness analysis
 
-A local machine learning project that trains text classifiers, compares them against a majority baseline, and evaluates the selected model on an untouched test set. No API key or GPU required.
+A reproducible benchmark of four spam classifiers on identical splits (TF-IDF logistic regression, TF-IDF naive Bayes, character n-gram SVM, and a fine-tuned MiniLM transformer), a test of how each one holds up against spammer obfuscation tricks, and a small FastAPI service with an inspection UI. No API key or GPU required (the transformer was fine-tuned on a laptop CPU).
 
-## Run on Windows PowerShell
+![SpamShield UI](docs/ui.png)
+
+## Results (UCI SMS Spam Collection, 5,159 de-duplicated messages, 1,032 held-out test messages)
+
+Reproduce: `python benchmark.py` (about 25 minutes on a 12-thread laptop CPU, mostly the transformer; `--skip-transformer` takes about 2 minutes). Output: [`reports/benchmark.json`](reports/benchmark.json). Hyper-parameters were chosen on the validation split, every model was refit on train+validation, and the test split was scored once. Threshold 0.5 for all models.
+
+| Model | Spam precision | Spam recall | Spam F1 (95% CI) | PR-AUC | FP / FN | Batch-1 latency (median) |
+| --- | --- | --- | --- | --- | --- | --- |
+| TF-IDF word n-grams + logistic regression (original baseline) | 0.917 | 0.945 | 0.931 (0.897-0.961) | 0.982 | 11 / 7 | 1.7 ms |
+| TF-IDF word n-grams + naive Bayes | 0.975 | 0.898 | 0.935 (0.899-0.964) | 0.971 | 3 / 13 | 3.7 ms |
+| TF-IDF character 2-5-grams + linear SVM (calibrated) | 0.976 | 0.938 | 0.956 (0.927-0.980) | 0.992 | 3 / 8 | 4.0 ms |
+| Fine-tuned MiniLM-L6 transformer (3 epochs, seed 42, 21 min CPU training) | 0.954 | 0.969 | **0.961** (0.934-0.985) | 0.995 | 6 / 4 | 46 ms |
+
+What this does and does not show:
+
+- The transformer has the highest point estimate, but **its advantage over the best classical model is not statistically distinguishable**: an exact McNemar test between the character SVM and the transformer gives 7 vs 8 discordant messages, p = 1.0. All four 95% intervals overlap. A 1,032-message test set (about 128 spam) cannot rank these models.
+- Intervals are bootstrap intervals over test messages. **The transformer was trained with one seed**; training variance is not measured. The latency numbers are single-message, model-only timings on a shared laptop, indicative only.
+- The 2011 English corpus is easy: the dumbest reasonable model already scores 0.93 F1. Absolute numbers do not carry over to current SMS traffic.
+
+## Robustness to obfuscation
+
+Spam recall on the 128 test spam messages after deterministic text tricks (`python benchmark.py`, table in `reports/benchmark.json`):
+
+| Model | Clean | Leetspeak (a->4, e->3 ...) | Look-alike (Cyrillic) letters | Dotted words (f.r.e.e) | Link tricks (hxxp, www .) |
+| --- | --- | --- | --- | --- | --- |
+| Word TF-IDF + logistic regression | 0.945 | 0.547 | 0.484 | 0.914 | 0.945 |
+| Word TF-IDF + naive Bayes | 0.898 | 0.773 | 0.719 | 0.828 | 0.898 |
+| Character n-gram SVM | 0.938 | 0.945 | 0.836 | 0.859 | 0.930 |
+| Fine-tuned MiniLM transformer | 0.969 | 1.000 | **0.281** | **0.383** | 0.969 |
+
+The headline finding: the most accurate clean-data model (the transformer) is the most brittle to look-alike characters and dotted words, because its WordPiece vocabulary shatters a perturbed word into unrelated pieces, while character n-grams degrade gracefully. Unicode normalization and homoglyph folding in front of the model, or training with perturbed examples, would be the next fix; neither is done here. These perturbations are simple, fixed, and not adaptive attacks. The UI has a probe that applies the same tricks to your own message.
+
+## Why the simpler model ships
+
+The service's primary model is the **character 2-5-gram TF-IDF linear SVM with probabilities calibrated by `CalibratedClassifierCV`**, not the transformer and not the original logistic regression. The evidence, all from the tables above:
+
+- On clean test data it matches the transformer: F1 0.956 vs 0.961, McNemar p = 1.0 (7 vs 8 discordant messages), overlapping intervals. Nothing here says the transformer is better.
+- Under obfuscation it is far more robust: recall 0.945 / 0.836 on leetspeak / look-alike letters versus 1.000 / 0.281 for the transformer (dotted words 0.859 vs 0.383).
+- It is about 11x faster per message (4.0 ms vs 46 ms batch-1, indicative) and is a 1.4 MB scikit-learn file instead of a PyTorch stack.
+- It beats the original word-level logistic regression on F1 (0.956 vs 0.931) and by a wide margin on the obfuscation columns.
+
+The transformer stays as an optional second opinion: if `models/transformer` exists, `/predict` also returns its score. Caveats: these are one-seed, one-corpus (2011 English) results on a 1,032-message test set, and the obfuscations are fixed, non-adaptive tricks; the choice is evidence-based, not proof. The calibrated probabilities have not yet been checked on a reliability plot (planned in the error-analysis step).
+
+## Serving
+
+```powershell
+pip install -r requirements.txt -r requirements-serve.txt
+python benchmark.py --export-primary      # about 1 minute: fits the shipped character n-gram SVM -> models/spamshield_svm.joblib
+python benchmark.py                       # optional: also writes models/transformer, shown as a second opinion (kept out of git)
+uvicorn spam_api:app --port 8000          # UI at /, docs at /docs
+```
+
+`POST /predict {"message": ...}` returns the primary (character n-gram SVM) spam probability, the transformer's as a second opinion if its weights are present, and the character n-grams that moved the primary score; `POST /probe` re-scores obfuscated variants. Messages are not stored. Tests: `python -m pytest tests -q` (13 passed).
+
+## Out-of-domain / drift evaluation: not done
+
+No second SMS corpus with a clear licence that permits redistribution or download by script was identified, so no out-of-domain number is reported. Random splits of one 2011 corpus are not a drift test; do not read these results as robustness to new scams.
+
+## Original baseline script (Windows PowerShell)
 
 ```powershell
 python -m venv .venv
@@ -31,15 +89,6 @@ The first training run downloads the public dataset. Subsequent runs use the loc
 
 `reports/metrics.json` contains measured results. `reports/errors.csv` supports qualitative error analysis. The model is saved to `models/spamshield.joblib`; load only artifacts you trust.
 
-## Learning walkthrough
-
-1. Read `load_data()` and explain why duplicate messages crossing partitions inflate evaluation scores.
-2. Read `train()` and distinguish training, validation, and test data.
-3. Explain TF-IDF: words that distinguish a message receive more weight than common words. Bigrams capture pairs such as “free prize”.
-4. Explain precision (how many flagged messages are spam), recall (how much spam is caught), and F1 (their harmonic mean). Accuracy alone can hide poor spam detection because ham is more common.
-5. Inspect at least ten errors in `reports/errors.csv`; record patterns and suggest improvements without tuning against the test set.
-6. Run your own examples and discuss why predictions can fail outside the dataset.
-
 ## Limitations and next experiments
 
 This is an educational benchmark, not a production spam filter. The historical English SMS corpus does not establish performance on current scams, email, multilingual messages or Indian SMS traffic. Deduplication removes exact normalized matches, but near-duplicate templates may remain. The random split is not a temporal evaluation. Batch latency is a local measurement and excludes model loading.
@@ -54,7 +103,7 @@ Source: https://archive.ics.uci.edu/dataset/228/sms+spam+collection
 
 Dataset license: CC BY 4.0. Downloaded raw data is kept out of Git. Do not treat benchmark messages as real contacts or redistribute personal details in demo screenshots.
 
-## Results
+## Original baseline results (first version)
 
 ### Held-out test results
 
@@ -64,7 +113,7 @@ After deduplication, this experiment used 5,159 messages: 3,095 training, 1,032 
 
 ## Verification
 
-Run `python -m unittest discover -s tests -v`. The offline suite checks deduplication, conflicting labels, invalid input and the train/save/reload/predict workflow. GitHub Actions runs these checks on pushes and pull requests. Synthetic test fixtures are used only for software checks; reported benchmark metrics come from the UCI data.
+Run `python -m unittest discover -s tests -v` (or `python -m pytest tests -q`). The offline suite checks deduplication, conflicting labels, invalid input and the train/save/reload/predict workflow. GitHub Actions runs these checks on pushes and pull requests. Synthetic test fixtures are used only for software checks; reported benchmark metrics come from the UCI data.
 
 Raw data, local model artifacts and message-level error exports are excluded from Git. The aggregate benchmark report is included in `reports/metrics.json`.
 
