@@ -5,7 +5,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.svm import LinearSVC
 from sklearn.pipeline import Pipeline
 
 import benchmark
@@ -22,7 +23,8 @@ LABELS = [1, 1, 1, 1, 0, 0, 0, 0] * 3
 
 
 def toy_models(transformer=None):
-    pipe = Pipeline([('tfidf', TfidfVectorizer()), ('classifier', LogisticRegression(max_iter=200))]).fit(TEXTS, LABELS)
+    pipe = Pipeline([('v', TfidfVectorizer(analyzer='char_wb', ngram_range=(2, 4))),
+                     ('m', CalibratedClassifierCV(LinearSVC(), cv=3))]).fit(TEXTS, LABELS)
     return spam_api.Models(pipe, transformer)
 
 
@@ -61,9 +63,24 @@ class Api(unittest.TestCase):
         r = self.client(toy_models()).post('/predict', json={'message': 'win a free cash prize now'})
         self.assertEqual(r.status_code, 200)
         body = r.json()
-        self.assertEqual(body['logistic_regression']['label'], 'spam')
+        self.assertEqual(body['char_svm']['label'], 'spam')
         self.assertTrue(any(e['weight'] > 0 for e in body['explanation']))
         self.assertNotIn('transformer', body)
+
+    def test_primary_is_calibrated_char_svm_with_valid_probabilities(self):
+        models = toy_models()
+        self.assertIsInstance(models.primary.named_steps['m'], CalibratedClassifierCV)
+        self.assertEqual(models.primary.named_steps['v'].analyzer, 'char_wb')
+        p = models.primary_probability(['win a free cash prize now', 'see you at lunch'])
+        self.assertTrue(((p >= 0) & (p <= 1)).all())
+        self.assertGreater(p[0], .5)
+        self.assertLess(p[1], .5)
+
+    def test_shipped_model_spec_is_calibrated_linear_svc(self):
+        builders, _ = benchmark.classical_candidates()
+        model = builders['tfidf_char_svm'](1)
+        self.assertIsInstance(model.named_steps['m'], CalibratedClassifierCV)
+        self.assertIsInstance(model.named_steps['m'].estimator, LinearSVC)
 
     def test_transformer_included_when_available(self):
         models = toy_models(transformer=lambda texts: np.full(len(texts), .7))

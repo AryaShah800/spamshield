@@ -199,8 +199,23 @@ def robustness(data, scorers):
             'examples': {p: f(spam[0]) for p, f in PERTURBATIONS.items()}}
 
 
+def export_primary(path=None):
+    """Fit the shipped model (calibrated char n-gram SVM) with C chosen on validation, refit on train+validation, save it."""
+    import joblib
+    data, _ = splits()
+    builders, grids = classical_candidates()
+    build = builders['tfidf_char_svm']
+    best_c = max(grids['tfidf_char_svm'], key=lambda c: f1_score(data['val'][1], (spam_scores(build(c).fit(*data['train']), data['val'][0]) >= .5).astype(int)))
+    model = build(best_c).fit(*data['dev'])
+    path = Path(path) if path else ROOT / 'models' / 'spamshield_svm.joblib'
+    path.parent.mkdir(exist_ok=True)
+    joblib.dump(model, path)
+    return best_c, metrics(data['test'][1], spam_scores(model, data['test'][0]))
+
+
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--export-primary', action='store_true', help='only fit and save the shipped char-SVM (about 1 minute)')
     parser.add_argument('--skip-transformer', action='store_true')
     parser.add_argument('--model', default='sentence-transformers/all-MiniLM-L6-v2')
     parser.add_argument('--epochs', type=int, default=3)
@@ -208,6 +223,9 @@ def main():
     parser.add_argument('--out', type=Path, default=ROOT / 'reports' / 'benchmark.json')
     parser.add_argument('--weights-dir', type=Path, default=ROOT / 'models' / 'transformer')
     args = parser.parse_args()
+    if args.export_primary:
+        print(export_primary())
+        return
     data, provenance = splits()
     results, scores, models = run_classical(data)
     scorers = {name: (lambda texts, m=model: spam_scores(m, texts)) for name, model in models.items()}

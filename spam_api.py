@@ -1,12 +1,14 @@
 """SpamShield service: FastAPI JSON API plus a single-page UI.
 
-    python spamshield.py train                    # creates models/spamshield.joblib (TF-IDF + logistic regression)
-    python benchmark.py                           # optional: fine-tuned transformer in models/transformer
+    python benchmark.py --export-primary          # creates models/spamshield_svm.joblib (char n-gram SVM, calibrated)
+    python benchmark.py                           # optional: fine-tuned transformer in models/transformer (second opinion)
     uvicorn spam_api:app --port 8000
 
 Endpoints: GET /  (UI), GET /health, POST /predict {message}, POST /probe {message}
-/predict returns the spam probability from the logistic regression and, when the transformer is present, from it too,
-plus the words that pushed the logistic-regression score up or down. /probe re-scores the message after
+/predict returns the spam probability from the primary model (character n-gram SVM, probabilities calibrated with
+CalibratedClassifierCV) and, when the transformer is present, a second opinion from it, plus the character n-grams
+that pushed the primary score up or down. The SVM ships as primary because it matched the transformer on F1
+(McNemar p = 1.0) and held up far better under obfuscation; see the README. /probe re-scores the message after
 obfuscation tricks (leetspeak, look-alike letters, dotted words, link tricks) to show how fragile each model is.
 Messages are not stored or logged. The model files are local trusted artifacts (joblib can execute code).
 """
@@ -29,25 +31,28 @@ class Message(BaseModel):
 
 
 class Models:
-    """Holds the classical pipeline and (optionally) the transformer; both expose spam_probability(list[str])."""
+    """Holds the primary pipeline (char n-gram SVM) and, optionally, the transformer second opinion."""
 
-    def __init__(self, classical, transformer=None):
-        self.classical, self.transformer = classical, transformer
+    def __init__(self, primary, transformer=None):
+        self.primary, self.transformer = primary, transformer
 
-    def classical_probability(self, texts):
-        return self.classical.predict_proba(texts)[:, 1]
+    def primary_probability(self, texts):
+        return self.primary.predict_proba(texts)[:, 1]
 
     def transformer_probability(self, texts):
         return None if self.transformer is None else self.transformer(texts)
 
     def explain(self, text, top=6):
-        """Words moving the logistic-regression score: tf-idf value times coefficient (log-odds units)."""
-        vectorizer, clf = self.classical.named_steps.get('tfidf'), self.classical.named_steps.get('classifier')
-        if vectorizer is None or not hasattr(clf, 'coef_'):
+        """Character n-grams moving the score: tf-idf value times the mean linear-SVM coefficient (margin units, not probabilities)."""
+        steps = self.primary.named_steps
+        vectorizer, clf = steps.get('v'), steps.get('m')
+        members = getattr(clf, 'calibrated_classifiers_', None)
+        if vectorizer is None or not members:
             return []
+        coef = np.mean([m.estimator.coef_[0] for m in members], axis=0)
         row = vectorizer.transform([text])
         names = vectorizer.get_feature_names_out()
-        contributions = [(names[i], float(v * clf.coef_[0][i])) for i, v in zip(row.indices, row.data)]
+        contributions = [(names[i], float(v * coef[i])) for i, v in zip(row.indices, row.data)]
         contributions.sort(key=lambda item: -abs(item[1]))
         return [{'term': t, 'weight': round(w, 3)} for t, w in contributions[:top]]
 
@@ -67,9 +72,9 @@ def load_transformer(directory):
 
 @lru_cache(maxsize=1)
 def default_models():
-    path = ROOT / 'models' / 'spamshield.joblib'
+    path = ROOT / 'models' / 'spamshield_svm.joblib'
     if not path.exists():
-        raise FileNotFoundError('Train first: python spamshield.py train')
+        raise FileNotFoundError('Train first: python benchmark.py --export-primary')
     transformer_dir = ROOT / 'models' / 'transformer'
     transformer = load_transformer(transformer_dir) if transformer_dir.exists() and not os.environ.get('SPAMSHIELD_NO_TRANSFORMER') else None
     return Models(joblib.load(path), transformer)
@@ -105,7 +110,7 @@ def create_app(models_provider=default_models):
     @app.post('/predict')
     def predict(body: Message):
         m, text = models(), body.message
-        result = {'logistic_regression': verdict(m.classical_probability([text])[0]), 'explanation': m.explain(text)}
+        result = {'char_svm': verdict(m.primary_probability([text])[0]), 'explanation': m.explain(text)}
         transformer = m.transformer_probability([text])
         if transformer is not None:
             result['transformer'] = verdict(transformer[0])
@@ -117,11 +122,11 @@ def create_app(models_provider=default_models):
         m, text = models(), body.message
         variants = {'original': text, **{name: fn(text) for name, fn in PERTURBATIONS.items()}}
         names, texts = list(variants), list(variants.values())
-        classical = m.classical_probability(texts)
+        classical = m.primary_probability(texts)
         transformer = m.transformer_probability(texts)
         rows = []
         for i, name in enumerate(names):
-            row = {'variant': name, 'text': texts[i], 'logistic_regression': round(float(classical[i]), 4)}
+            row = {'variant': name, 'text': texts[i], 'char_svm': round(float(classical[i]), 4)}
             if transformer is not None:
                 row['transformer'] = round(float(transformer[i]), 4)
             rows.append(row)

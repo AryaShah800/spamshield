@@ -34,16 +34,27 @@ Spam recall on the 128 test spam messages after deterministic text tricks (`pyth
 
 The headline finding: the most accurate clean-data model (the transformer) is the most brittle to look-alike characters and dotted words, because its WordPiece vocabulary shatters a perturbed word into unrelated pieces, while character n-grams degrade gracefully. Unicode normalization and homoglyph folding in front of the model, or training with perturbed examples, would be the next fix; neither is done here. These perturbations are simple, fixed, and not adaptive attacks. The UI has a probe that applies the same tricks to your own message.
 
+## Why the simpler model ships
+
+The service's primary model is the **character 2-5-gram TF-IDF linear SVM with probabilities calibrated by `CalibratedClassifierCV`**, not the transformer and not the original logistic regression. The evidence, all from the tables above:
+
+- On clean test data it matches the transformer: F1 0.956 vs 0.961, McNemar p = 1.0 (7 vs 8 discordant messages), overlapping intervals. Nothing here says the transformer is better.
+- Under obfuscation it is far more robust: recall 0.945 / 0.836 on leetspeak / look-alike letters versus 1.000 / 0.281 for the transformer (dotted words 0.859 vs 0.383).
+- It is about 11x faster per message (4.0 ms vs 46 ms batch-1, indicative) and is a 1.4 MB scikit-learn file instead of a PyTorch stack.
+- It beats the original word-level logistic regression on F1 (0.956 vs 0.931) and by a wide margin on the obfuscation columns.
+
+The transformer stays as an optional second opinion: if `models/transformer` exists, `/predict` also returns its score. Caveats: these are one-seed, one-corpus (2011 English) results on a 1,032-message test set, and the obfuscations are fixed, non-adaptive tricks; the choice is evidence-based, not proof. The calibrated probabilities have not yet been checked on a reliability plot (planned in the error-analysis step).
+
 ## Serving
 
 ```powershell
 pip install -r requirements.txt -r requirements-serve.txt
-python spamshield.py train                # creates models/spamshield.joblib (logistic regression)
-python benchmark.py                       # optional: also writes models/transformer (kept out of git)
+python benchmark.py --export-primary      # about 1 minute: fits the shipped character n-gram SVM -> models/spamshield_svm.joblib
+python benchmark.py                       # optional: also writes models/transformer, shown as a second opinion (kept out of git)
 uvicorn spam_api:app --port 8000          # UI at /, docs at /docs
 ```
 
-`POST /predict {"message": ...}` returns spam probabilities and the words that moved the logistic-regression score; `POST /probe` re-scores obfuscated variants. Messages are not stored. Tests: `python -m pytest tests -q` (11 passed).
+`POST /predict {"message": ...}` returns the primary (character n-gram SVM) spam probability, the transformer's as a second opinion if its weights are present, and the character n-grams that moved the primary score; `POST /probe` re-scores obfuscated variants. Messages are not stored. Tests: `python -m pytest tests -q` (13 passed).
 
 ## Out-of-domain / drift evaluation: not done
 

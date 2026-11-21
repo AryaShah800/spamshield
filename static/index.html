@@ -32,7 +32,7 @@ td.t{font-family:var(--mono);font-size:.78rem;max-width:20rem;overflow-wrap:anyw
 </style></head>
 <body><div class="wrap">
 <h1>Spam<span>Shield</span></h1>
-<p class="sub">Paste an SMS. A TF-IDF logistic regression and a fine-tuned MiniLM transformer each score it, then you can see how easily a spammer's formatting tricks change the scores.</p>
+<p class="sub">Paste an SMS. A character n-gram SVM (the shipped model) scores it, and a fine-tuned MiniLM transformer, when installed, gives a second opinion, then you can see how easily a spammer's formatting tricks change the scores.</p>
 <div class="grid">
 <section class="card"><label for="msg">Message</label><textarea id="msg" maxlength="1000" placeholder="Type or paste a text message"></textarea>
 <div class="row"><button class="go" id="go">Check message</button><button class="ex" data-t="WINNER!! As a valued network customer you have been selected to receive a 900 prize reward! To claim call 09061701461. Claim code KL341. Valid 12 hours only.">spam example</button><button class="ex" data-t="Hey, are we still meeting at 6 near the station? I will bring the notes from class.">ham example</button></div>
@@ -50,9 +50,9 @@ function meter(p){const m=el('div','','meter'),i=el('i');i.style.width=(p*100)+'
 function block(name,v){const d=el('div');d.append(el('div',name,'mname'));const row=el('div','','verdict');row.append(el('span',v.label,'label '+v.label),el('span',(v.spam_probability*100).toFixed(1)+'% spam','pct'));d.append(row,meter(v.spam_probability));return d;}
 function msg(){const t=$('#msg').value.trim();if(!t){$('#err').textContent='Enter a message first.';return null;}$('#err').textContent='';return t;}
 document.querySelectorAll('.ex').forEach(b=>b.addEventListener('click',()=>{$('#msg').value=b.dataset.t;}));
-$('#go').addEventListener('click',async()=>{const t=msg();if(!t)return;try{const r=await post('/predict',{message:t});const o=$('#out');o.replaceChildren(block('TF-IDF + logistic regression',r.logistic_regression));
-if(r.transformer)o.append(block('Fine-tuned MiniLM transformer',r.transformer));
-if(r.explanation.length){o.append(el('div','Words that moved the logistic-regression score','mname'));const c=el('div','','chips');r.explanation.forEach(e=>c.append(el('span',`${e.term} ${e.weight>0?'+':''}${e.weight}`,'chip '+(e.weight>0?'up':'down'))));o.append(c);}}catch(e){$('#err').textContent=e.message;}});
-$('#probe').addEventListener('click',async()=>{const t=msg();if(!t)return;try{const r=await post('/probe',{message:t});const tb=el('table'),h=el('tr');['Variant','Rewritten message','Logistic regression'].concat(r.rows[0].transformer!==undefined?['Transformer']:[]).forEach(x=>h.append(el('th',x)));tb.append(h);
-r.rows.forEach(x=>{const tr=el('tr');tr.append(el('td',x.variant.replace('_',' ')),el('td',x.text,'t'));['logistic_regression','transformer'].forEach(k=>{if(x[k]===undefined)return;const td=el('td'),c=el('div','','cell');c.append(meter(x[k]),el('span',(x[k]*100).toFixed(0)+'%'));td.append(c);tr.append(td);});tb.append(tr);});$('#probeout').replaceChildren(tb);}catch(e){$('#err').textContent=e.message;}});
+$('#go').addEventListener('click',async()=>{const t=msg();if(!t)return;try{const r=await post('/predict',{message:t});const o=$('#out');o.replaceChildren(block('Character n-gram SVM (primary)',r.char_svm));
+if(r.transformer)o.append(block('Fine-tuned MiniLM (second opinion)',r.transformer));
+if(r.explanation.length){o.append(el('div','Character n-grams that moved the primary score','mname'));const c=el('div','','chips');r.explanation.forEach(e=>c.append(el('span',`${e.term} ${e.weight>0?'+':''}${e.weight}`,'chip '+(e.weight>0?'up':'down'))));o.append(c);}}catch(e){$('#err').textContent=e.message;}});
+$('#probe').addEventListener('click',async()=>{const t=msg();if(!t)return;try{const r=await post('/probe',{message:t});const tb=el('table'),h=el('tr');['Variant','Rewritten message','Char SVM (primary)'].concat(r.rows[0].transformer!==undefined?['Transformer']:[]).forEach(x=>h.append(el('th',x)));tb.append(h);
+r.rows.forEach(x=>{const tr=el('tr');tr.append(el('td',x.variant.replace('_',' ')),el('td',x.text,'t'));['char_svm','transformer'].forEach(k=>{if(x[k]===undefined)return;const td=el('td'),c=el('div','','cell');c.append(meter(x[k]),el('span',(x[k]*100).toFixed(0)+'%'));td.append(c);tr.append(td);});tb.append(tr);});$('#probeout').replaceChildren(tb);}catch(e){$('#err').textContent=e.message;}});
 </script></body></html>
