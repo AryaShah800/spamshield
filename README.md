@@ -1,6 +1,6 @@
 # SpamShield: SMS spam detection, classical vs transformer, with robustness analysis
 
-**Live demo:** _(link added after deploy)_ A free Render instance (`render.yaml`, service `spamshield-demo`) serving the calibrated char n-gram SVM with the inspection UI. The free tier sleeps when idle, so the first request after a pause can take about a minute. Messages are not stored; requests are limited to 8 KB and 30 per minute per client.
+**Live demo: https://spamshield-demo.onrender.com** A free Render instance (`render.yaml`, service `spamshield-demo`) serving the calibrated char n-gram SVM with the inspection UI. The free tier sleeps when idle, so the first request after a pause can take about a minute. Messages are not stored; requests are limited to 8 KB and 30 per minute per client.
 
 A reproducible benchmark of four spam classifiers on identical splits (TF-IDF logistic regression, TF-IDF naive Bayes, character n-gram SVM, and a fine-tuned MiniLM transformer), a test of how each one holds up against spammer obfuscation tricks, and a small FastAPI service with an inspection UI. No API key or GPU required (the transformer was fine-tuned on a laptop CPU).
 
