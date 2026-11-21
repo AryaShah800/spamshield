@@ -13,17 +13,23 @@ obfuscation tricks (leetspeak, look-alike letters, dotted words, link tricks) to
 Messages are not stored or logged. The model files are local trusted artifacts (joblib can execute code).
 """
 import os
+import time
+from collections import defaultdict, deque
 from functools import lru_cache
 from pathlib import Path
 
 import joblib
 import numpy as np
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parent
 MAX_CHARS = 1000
+MAX_BODY_BYTES = 8 * 1024        # 1000 chars of JSON-escaped unicode fits comfortably; anything larger is rejected unread
+RATE_LIMIT_PER_MINUTE = int(os.environ.get('SPAMSHIELD_RATE_LIMIT', '30'))
+RATE_WINDOW_SECONDS = 60
+EXEMPT_PATHS = {'/', '/health'}
 
 
 class Message(BaseModel):
@@ -84,10 +90,37 @@ def verdict(probability):
     return {'spam_probability': round(float(probability), 4), 'label': 'spam' if probability >= 0.5 else 'ham'}
 
 
-def create_app(models_provider=default_models):
+def create_app(models_provider=default_models, rate_limit=RATE_LIMIT_PER_MINUTE, clock=time.monotonic):
     app = FastAPI(title='SpamShield', version='2.0.0',
                   description='SMS spam classifier trained on the 2011 UCI SMS Spam Collection (English). '
                               'Not a production filter; see the README for limits.')
+
+    hits = defaultdict(deque)   # client address -> timestamps of requests inside the window (in-memory, per process)
+
+    def client_address(request):
+        # Behind Render's proxy the real client is the first X-Forwarded-For hop.
+        forwarded = request.headers.get('x-forwarded-for', '')
+        return forwarded.split(',')[0].strip() or (request.client.host if request.client else 'unknown')
+
+    @app.middleware('http')
+    async def limits(request, call_next):
+        if request.method == 'POST':
+            length = request.headers.get('content-length')
+            if (length is None and 'transfer-encoding' in request.headers) or (length is not None and length.isdigit() and int(length) > MAX_BODY_BYTES):
+                return JSONResponse({'detail': f'Request body too large (limit {MAX_BODY_BYTES} bytes).'}, status_code=413)
+        if request.url.path not in EXEMPT_PATHS and rate_limit:
+            now, window = clock(), hits[client_address(request)]
+            while window and now - window[0] >= RATE_WINDOW_SECONDS:
+                window.popleft()
+            if len(window) >= rate_limit:
+                retry = max(1, int(RATE_WINDOW_SECONDS - (now - window[0])) + 1)
+                return JSONResponse({'detail': f'Rate limit of {rate_limit} requests per minute exceeded. Try again shortly.'},
+                                    status_code=429, headers={'Retry-After': str(retry)})
+            window.append(now)
+            if len(hits) > 10000:   # bound memory: drop idle addresses
+                for key in [k for k, v in hits.items() if not v or now - v[-1] >= RATE_WINDOW_SECONDS]:
+                    del hits[key]
+        return await call_next(request)
 
     def models():
         try:

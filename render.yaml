@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: spamshield-demo
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: SPAMSHIELD_RATE_LIMIT
+        value: "30"

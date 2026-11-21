@@ -108,5 +108,64 @@ class Api(unittest.TestCase):
         self.assertIn('SpamShield', r.text)
 
 
+@unittest.skipIf(TestClient is None, 'install requirements-serve.txt')
+class Hardening(unittest.TestCase):
+    def client(self, **kwargs):
+        return TestClient(spam_api.create_app(lambda: toy_models(), **kwargs))
+
+    def test_oversized_body_rejected_before_parsing(self):
+        r = self.client().post('/predict', content=b'{"message": "' + b'a' * 20000 + b'"}',
+                               headers={'Content-Type': 'application/json'})
+        self.assertEqual(r.status_code, 413)
+        self.assertIn('detail', r.json())
+
+    def test_rate_limit_returns_429_with_retry_after(self):
+        c = self.client(rate_limit=3)
+        codes = [c.post('/predict', json={'message': 'hello there'}).status_code for _ in range(5)]
+        self.assertEqual(codes, [200, 200, 200, 429, 429])
+        r = c.post('/predict', json={'message': 'hello there'})
+        self.assertIn('retry-after', r.headers)
+        self.assertIn('detail', r.json())
+
+    def test_health_and_index_are_not_rate_limited(self):
+        c = self.client(rate_limit=1)
+        self.assertTrue(all(c.get('/health').status_code == 200 for _ in range(5)))
+        self.assertEqual(c.get('/').status_code, 200)
+
+    def test_rate_limit_is_per_client_address(self):
+        c = self.client(rate_limit=1)
+        a = {'X-Forwarded-For': '203.0.113.1'}
+        b = {'X-Forwarded-For': '203.0.113.2'}
+        self.assertEqual(c.post('/predict', json={'message': 'hi'}, headers=a).status_code, 200)
+        self.assertEqual(c.post('/predict', json={'message': 'hi'}, headers=a).status_code, 429)
+        self.assertEqual(c.post('/predict', json={'message': 'hi'}, headers=b).status_code, 200)
+
+    def test_rate_limit_window_expires(self):
+        now = [1000.0]
+        c = self.client(rate_limit=1, clock=lambda: now[0])
+        self.assertEqual(c.post('/predict', json={'message': 'hi'}).status_code, 200)
+        self.assertEqual(c.post('/predict', json={'message': 'hi'}).status_code, 429)
+        now[0] += 61
+        self.assertEqual(c.post('/predict', json={'message': 'hi'}).status_code, 200)
+
+    def test_health_reports_ready_for_probes(self):
+        body = self.client().get('/health').json()
+        self.assertEqual((body['status'], body['ready']), ('ok', True))
+
+
+@unittest.skipIf(TestClient is None, 'install requirements-serve.txt')
+class ShippedModel(unittest.TestCase):
+    """The committed models/spamshield_svm.joblib that the Docker image serves (no transformer, no retraining)."""
+
+    def test_committed_model_serves_through_the_real_provider(self):
+        path = spam_api.ROOT / 'models' / 'spamshield_svm.joblib'
+        self.assertTrue(path.exists(), 'models/spamshield_svm.joblib must be committed')
+        self.assertLess(path.stat().st_size, 5 * 1024 * 1024)
+        client = TestClient(spam_api.create_app(lambda: spam_api.Models(spam_api.joblib.load(path))))
+        spam = client.post('/predict', json={'message': 'WINNER!! You have won a 1000 prize. Call 09061701461 now to claim'}).json()
+        ham = client.post('/predict', json={'message': 'Are we still meeting for lunch tomorrow?'}).json()
+        self.assertEqual((spam['char_svm']['label'], ham['char_svm']['label']), ('spam', 'ham'))
+
+
 if __name__ == '__main__':
     unittest.main()

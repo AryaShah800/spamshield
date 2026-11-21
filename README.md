@@ -1,5 +1,7 @@
 # SpamShield: SMS spam detection, classical vs transformer, with robustness analysis
 
+**Live demo:** _(link added after deploy)_ A free Render instance (`render.yaml`, service `spamshield-demo`) serving the calibrated char n-gram SVM with the inspection UI. The free tier sleeps when idle, so the first request after a pause can take about a minute. Messages are not stored; requests are limited to 8 KB and 30 per minute per client.
+
 A reproducible benchmark of four spam classifiers on identical splits (TF-IDF logistic regression, TF-IDF naive Bayes, character n-gram SVM, and a fine-tuned MiniLM transformer), a test of how each one holds up against spammer obfuscation tricks, and a small FastAPI service with an inspection UI. No API key or GPU required (the transformer was fine-tuned on a laptop CPU).
 
 ![SpamShield UI](docs/ui.png)
@@ -46,6 +48,9 @@ The service's primary model is the **character 2-5-gram TF-IDF linear SVM with p
 The transformer stays as an optional second opinion: if `models/transformer` exists, `/predict` also returns its score. Caveats: these are one-seed, one-corpus (2011 English) results on a 1,032-message test set, and the obfuscations are fixed, non-adaptive tricks; the choice is evidence-based, not proof. Calibration of these probabilities: ECE 0.0105, Brier 0.0074 ([`MODEL_CARD.md`](MODEL_CARD.md), [`reports/calibration.png`](reports/calibration.png)); the middle bins hold very few messages.
 
 ## Serving
+
+### Hosted demo (Docker, Render free tier)
+`Dockerfile` installs only `requirements-serve.txt` (FastAPI, uvicorn, scikit-learn, joblib; no torch or transformers) and copies the committed `models/spamshield_svm.joblib` (1.4 MB; retraining with `python benchmark.py --export-primary` reproduces the reported test F1 0.9562 / PR-AUC 0.9916, max probability difference 9e-7). Build and run: `docker build -t spamshield-demo .` then `docker run -m 512m -e PORT=10000 -p 8000:10000 spamshield-demo`. Measured with `docker stats --no-stream` after classifying several messages: about 110 MiB. `/health` is the Render health check; `/predict` and `/probe` return 413 above 8 KB and 429 beyond `SPAMSHIELD_RATE_LIMIT` (default 30) requests per minute per client address (in-memory, per process).
 
 ```powershell
 pip install -r requirements.txt -r requirements-serve.txt
