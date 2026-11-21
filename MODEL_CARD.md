@@ -4,7 +4,7 @@
 | --- | --- |
 | Model | TF-IDF character 2-5-grams (`char_wb`, min_df 2, sublinear tf) -> LinearSVC (class-balanced, C = 0.1 chosen on validation) -> `CalibratedClassifierCV` (3-fold, sigmoid) |
 | Artifact | `models/spamshield_svm.joblib` (1.4 MB, not in git). Rebuild: `python benchmark.py --export-primary` |
-| Data | UCI SMS Spam Collection (2011, English, mostly UK/Singapore SMS), 5,159 messages after removing duplicates and conflicting labels. 60/20/20 stratified split, seed 42; final model fit on train+validation (4,127) |
+| Data | UCI SMS Spam Collection (2011, English), 5,159 messages after removing duplicates and conflicting labels. 60/20/20 stratified split, seed 42; final model fit on train+validation (4,127) |
 | Intended use | Learning/portfolio demonstration of a spam classifier with an honest benchmark. Scoring a short English SMS and showing which character n-grams drove the score |
 | Not intended for | Production filtering, other languages, email, modern scam traffic (UPI/KYC/delivery phishing), Indian SMS formats, any decision about a person |
 
@@ -26,7 +26,7 @@ Comparison: the fine-tuned MiniLM transformer scored F1 0.961 (single seed); McN
 ## Errors (details in `reports/error_analysis.md`)
 
 - 3 false positives: short, friendly messages that contain a word common in spam ("reply", "text", "free"). Probabilities 0.64-0.81, so a higher threshold would remove them, at a recall cost that was not evaluated.
-- 8 false negatives: spam that reads like conversation or has no promotional vocabulary (a phone number appended to an apology, a "dating" message, a stock-tip pitch at 0.49) or that is a link-only pitch. Four of the eight sit between 0.25 and 0.49, close to the threshold.
+- 8 false negatives: spam that reads like conversation or has no promotional vocabulary (a phone number appended to an apology, a "dating" message, a stock-tip pitch at 0.49) or that is a link-only pitch. Five of the eight sit between 0.25 and 0.49, close to the threshold.
 - These are 11 errors in total; any statement about error *patterns* rests on very small counts.
 
 ## Limits and risks
