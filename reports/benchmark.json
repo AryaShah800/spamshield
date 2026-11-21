@@ -1,0 +1,145 @@
+{
+  "dataset": {
+    "raw_rows": 5574,
+    "unique_rows": 5159,
+    "conflicting_groups_removed": 0,
+    "sha256": "7d039a24a6083ed9ef0f806ebad56bbb976e3aeb8de05669173bfdc4996c239d"
+  },
+  "split": {
+    "train": 3095,
+    "val": 1032,
+    "dev": 4127,
+    "test": 1032
+  },
+  "threshold": 0.5,
+  "results": {
+    "tfidf_word_logreg": {
+      "selected_param": 1,
+      "spam_precision": 0.9167,
+      "spam_recall": 0.9453,
+      "spam_f1": 0.9308,
+      "pr_auc": 0.9817,
+      "false_positives": 11,
+      "false_negatives": 7,
+      "f1_ci95": [
+        0.8965,
+        0.9612
+      ],
+      "latency_batch1": {
+        "median_ms": 1.7,
+        "p95_ms": 2.17
+      }
+    },
+    "tfidf_word_nb": {
+      "selected_param": 0.1,
+      "spam_precision": 0.9746,
+      "spam_recall": 0.8984,
+      "spam_f1": 0.935,
+      "pr_auc": 0.9706,
+      "false_positives": 3,
+      "false_negatives": 13,
+      "f1_ci95": [
+        0.8987,
+        0.9639
+      ],
+      "latency_batch1": {
+        "median_ms": 3.7,
+        "p95_ms": 6.73
+      }
+    },
+    "tfidf_char_svm": {
+      "selected_param": 0.1,
+      "spam_precision": 0.9756,
+      "spam_recall": 0.9375,
+      "spam_f1": 0.9562,
+      "pr_auc": 0.9916,
+      "false_positives": 3,
+      "false_negatives": 8,
+      "f1_ci95": [
+        0.9273,
+        0.9799
+      ],
+      "latency_batch1": {
+        "median_ms": 4.01,
+        "p95_ms": 7.45
+      }
+    },
+    "finetuned_transformer": {
+      "model": "sentence-transformers/all-MiniLM-L6-v2",
+      "epochs": 3,
+      "seed": 42,
+      "train_rows": 4127,
+      "train_seconds": 1264.2,
+      "epoch_loss": [
+        0.273,
+        0.0675,
+        0.0403
+      ],
+      "cpu_threads": 6,
+      "spam_precision": 0.9538,
+      "spam_recall": 0.9688,
+      "spam_f1": 0.9612,
+      "pr_auc": 0.9948,
+      "false_positives": 6,
+      "false_negatives": 4,
+      "f1_ci95": [
+        0.9344,
+        0.985
+      ],
+      "latency_batch1": {
+        "median_ms": 46.45,
+        "p95_ms": 62.93
+      }
+    }
+  },
+  "best_classical": "tfidf_char_svm",
+  "robustness": {
+    "spam_messages": 128,
+    "metric": "spam recall at threshold 0.5 on perturbed test spam",
+    "table": {
+      "tfidf_word_logreg": {
+        "clean_spam_recall": 0.9453,
+        "leetspeak": 0.5469,
+        "homoglyphs": 0.4844,
+        "dotted_words": 0.9141,
+        "link_obfuscation": 0.9453
+      },
+      "tfidf_word_nb": {
+        "clean_spam_recall": 0.8984,
+        "leetspeak": 0.7734,
+        "homoglyphs": 0.7188,
+        "dotted_words": 0.8281,
+        "link_obfuscation": 0.8984
+      },
+      "tfidf_char_svm": {
+        "clean_spam_recall": 0.9375,
+        "leetspeak": 0.9453,
+        "homoglyphs": 0.8359,
+        "dotted_words": 0.8594,
+        "link_obfuscation": 0.9297
+      },
+      "finetuned_transformer": {
+        "clean_spam_recall": 0.9688,
+        "leetspeak": 1.0,
+        "homoglyphs": 0.2812,
+        "dotted_words": 0.3828,
+        "link_obfuscation": 0.9688
+      }
+    },
+    "examples": {
+      "leetspeak": "17 70 80488. Y0ur 500 fr33 73x7 m3554g35 4r3 v4l1d un71l 31 D3c3mb3r 2005.",
+      "homoglyphs": "іt tо 80488. Yоur 500 frее tехt mеssаgеs аrе vаlіd untіl 31 Dесеmbеr 2005.",
+      "dotted_words": "it to 80488. Your 500 free text m.e.s.s.a.g.e.s are v.a.l.i.d u.n.t.i.l 31 D.e.c.e.m.b.e.r 2005.",
+      "link_obfuscation": "it to 80488. Your 500 free text messages are valid until 31 December 2005."
+    }
+  },
+  "environment": {
+    "python": "3.13.9",
+    "processor": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel"
+  },
+  "mcnemar_best_classical_vs_transformer": {
+    "only_first_correct": 7,
+    "only_second_correct": 8,
+    "p_value": 1.0
+  }
+}
