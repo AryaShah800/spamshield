@@ -1,0 +1,8 @@
+*
+!requirements-serve.txt
+!spam_api.py
+!spamshield.py
+!benchmark.py
+!static/
+!static/**
+!models/spamshield_svm.joblib
