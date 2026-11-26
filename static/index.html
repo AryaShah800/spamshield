@@ -36,10 +36,10 @@ td.t{font-family:var(--mono);font-size:.78rem;max-width:20rem;overflow-wrap:anyw
 <div class="grid">
 <section class="card"><label for="msg">Message</label><textarea id="msg" maxlength="1000" placeholder="Type or paste a text message"></textarea>
 <div class="row"><button class="go" id="go">Check message</button><button class="ex" data-t="WINNER!! As a valued network customer you have been selected to receive a 900 prize reward! To claim call 09061701461. Claim code KL341. Valid 12 hours only.">spam example</button><button class="ex" data-t="Hey, are we still meeting at 6 near the station? I will bring the notes from class.">ham example</button></div>
-<div id="err" role="status" aria-live="polite"></div></section>
+<div id="err" role="alert"></div></section>
 <section class="card" id="out" aria-live="polite"><p class="sub" style="margin:0">Result appears here.</p></section></div>
 <section class="card" style="margin-top:1.2rem"><div class="row" style="margin:0 0 .6rem;justify-content:space-between;align-items:center"><strong>Obfuscation probe</strong><button id="probe">Run probe</button></div>
-<div id="probeout"><p class="sub" style="margin:0">Re-scores your message with leetspeak, look-alike letters, dotted words and link tricks.</p></div></section>
+<div id="probeout" style="overflow-x:auto"><p class="sub" style="margin:0">Re-scores your message with leetspeak, look-alike letters, dotted words and link tricks.</p></div></section>
 <p class="note">Trained on the 2011 English UCI SMS Spam Collection (5,159 de-duplicated messages). It is a benchmark model, not a production filter: it has not been tested on current scams, other languages or Indian SMS traffic. Messages are scored in memory and not stored.</p>
 </div>
 <script>
@@ -49,10 +49,13 @@ async function post(u,b){const r=await fetch(u,{method:'POST',headers:{'Content-
 function meter(p){const m=el('div','','meter'),i=el('i');i.style.width=(p*100)+'%';m.append(i);return m;}
 function block(name,v){const d=el('div');d.append(el('div',name,'mname'));const row=el('div','','verdict');row.append(el('span',v.label,'label '+v.label),el('span',(v.spam_probability*100).toFixed(1)+'% spam','pct'));d.append(row,meter(v.spam_probability));return d;}
 function msg(){const t=$('#msg').value.trim();if(!t){$('#err').textContent='Enter a message first.';return null;}$('#err').textContent='';return t;}
-document.querySelectorAll('.ex').forEach(b=>b.addEventListener('click',()=>{$('#msg').value=b.dataset.t;}));
-$('#go').addEventListener('click',async()=>{const t=msg();if(!t)return;try{const r=await post('/predict',{message:t});const o=$('#out');o.replaceChildren(block('Character n-gram SVM (primary)',r.char_svm));
+document.querySelectorAll('.ex').forEach(b=>b.addEventListener('click',()=>{$('#msg').value=b.dataset.t;$('#err').textContent='';$('#msg').focus();}));
+// Disable a button while its request runs: a cold start can take a minute, and repeat clicks used up the rate limit.
+async function busy(btn,label,work){const old=btn.textContent;btn.disabled=true;btn.textContent=label;try{await work();}finally{btn.disabled=false;btn.textContent=old;}}
+$('#msg').addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();$('#go').click();}});
+$('#go').addEventListener('click',async()=>{const t=msg();if(!t||$('#go').disabled)return;await busy($('#go'),'Checking…',async()=>{try{const r=await post('/predict',{message:t});const o=$('#out');o.replaceChildren(block('Character n-gram SVM (primary)',r.char_svm));
 if(r.transformer)o.append(block('Fine-tuned MiniLM (second opinion)',r.transformer));
-if(r.explanation.length){o.append(el('div','Character n-grams that moved the primary score','mname'));const c=el('div','','chips');r.explanation.forEach(e=>c.append(el('span',`${e.term} ${e.weight>0?'+':''}${e.weight}`,'chip '+(e.weight>0?'up':'down'))));o.append(c);}}catch(e){$('#err').textContent=e.message;}});
-$('#probe').addEventListener('click',async()=>{const t=msg();if(!t)return;try{const r=await post('/probe',{message:t});const tb=el('table'),h=el('tr');['Variant','Rewritten message','Char SVM (primary)'].concat(r.rows[0].transformer!==undefined?['Transformer']:[]).forEach(x=>h.append(el('th',x)));tb.append(h);
-r.rows.forEach(x=>{const tr=el('tr');tr.append(el('td',x.variant.replace('_',' ')),el('td',x.text,'t'));['char_svm','transformer'].forEach(k=>{if(x[k]===undefined)return;const td=el('td'),c=el('div','','cell');c.append(meter(x[k]),el('span',(x[k]*100).toFixed(0)+'%'));td.append(c);tr.append(td);});tb.append(tr);});$('#probeout').replaceChildren(tb);}catch(e){$('#err').textContent=e.message;}});
+if(r.explanation.length){o.append(el('div','Character n-grams that moved the primary score','mname'));const c=el('div','','chips');r.explanation.forEach(e=>c.append(el('span',`${e.term} ${e.weight>0?'+':''}${e.weight}`,'chip '+(e.weight>0?'up':'down'))));o.append(c);}}catch(e){$('#err').textContent=e.message;}});});
+$('#probe').addEventListener('click',async()=>{const t=msg();if(!t||$('#probe').disabled)return;await busy($('#probe'),'Probing…',async()=>{try{const r=await post('/probe',{message:t});const tb=el('table'),h=el('tr');['Variant','Rewritten message','Char SVM (primary)'].concat(r.rows[0].transformer!==undefined?['Transformer']:[]).forEach(x=>h.append(el('th',x)));tb.append(h);
+r.rows.forEach(x=>{const tr=el('tr');tr.append(el('td',x.variant.replace('_',' ')),el('td',x.text,'t'));['char_svm','transformer'].forEach(k=>{if(x[k]===undefined)return;const td=el('td'),c=el('div','','cell');c.append(meter(x[k]),el('span',(x[k]*100).toFixed(0)+'%'));td.append(c);tr.append(td);});tb.append(tr);});$('#probeout').replaceChildren(tb);}catch(e){$('#err').textContent=e.message;}});});
 </script></body></html>
