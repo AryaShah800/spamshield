@@ -59,7 +59,7 @@ python benchmark.py                       # optional: also writes models/transfo
 uvicorn spam_api:app --port 8000          # UI at /, docs at /docs
 ```
 
-`POST /predict {"message": ...}` returns the primary (character n-gram SVM) spam probability, the transformer's as a second opinion if its weights are present, and the character n-grams that moved the primary score; `POST /probe` re-scores obfuscated variants. Messages are not stored. Tests: `python -m pytest tests -q` (13 passed).
+`POST /predict {"message": ...}` returns the primary (character n-gram SVM) spam probability, the transformer's as a second opinion if its weights are present, and the character n-grams that moved the primary score; `POST /probe` re-scores obfuscated variants. Messages are not stored. Tests: `python -m unittest discover -s tests -v` (what CI runs).
 
 ## Out-of-domain / drift evaluation: not done
 

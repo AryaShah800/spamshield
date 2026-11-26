@@ -140,6 +140,17 @@ class Hardening(unittest.TestCase):
         self.assertEqual(c.post('/predict', json={'message': 'hi'}, headers=a).status_code, 429)
         self.assertEqual(c.post('/predict', json={'message': 'hi'}, headers=b).status_code, 200)
 
+    def test_a_spoofed_first_forwarded_hop_does_not_dodge_the_rate_limit(self):
+        # Render appends the real client address; anything before it is client-controlled.
+        c = self.client(rate_limit=1)
+        self.assertEqual(c.post('/predict', json={'message': 'hi'}, headers={'X-Forwarded-For': '1.1.1.1, 203.0.113.9'}).status_code, 200)
+        self.assertEqual(c.post('/predict', json={'message': 'hi'}, headers={'X-Forwarded-For': '2.2.2.2, 203.0.113.9'}).status_code, 429)
+
+    def test_whitespace_only_messages_are_rejected(self):
+        c = self.client()
+        self.assertEqual(c.post('/predict', json={'message': ' \n\t '}).status_code, 422)
+        self.assertEqual(c.post('/probe', json={'message': '   '}).status_code, 422)
+
     def test_rate_limit_window_expires(self):
         now = [1000.0]
         c = self.client(rate_limit=1, clock=lambda: now[0])

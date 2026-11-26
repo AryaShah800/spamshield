@@ -22,7 +22,7 @@ import joblib
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 ROOT = Path(__file__).resolve().parent
 MAX_CHARS = 1000
@@ -34,6 +34,14 @@ EXEMPT_PATHS = {'/', '/health'}
 
 class Message(BaseModel):
     message: str = Field(min_length=1, max_length=MAX_CHARS)
+
+    @field_validator('message')
+    @classmethod
+    def not_blank(cls, value):
+        # min_length=1 still let "   " through, which scored an empty message.
+        if not value.strip():
+            raise ValueError('Message cannot be blank')
+        return value
 
 
 class Models:
@@ -55,9 +63,12 @@ class Models:
         members = getattr(clf, 'calibrated_classifiers_', None)
         if vectorizer is None or not members:
             return []
-        coef = np.mean([m.estimator.coef_[0] for m in members], axis=0)
+        # The averaged coefficients and the vocabulary never change, so compute them once.
+        if getattr(self, '_explain_cache', None) is None:
+            self._explain_cache = (np.mean([m.estimator.coef_[0] for m in members], axis=0),
+                                   vectorizer.get_feature_names_out())
+        coef, names = self._explain_cache
         row = vectorizer.transform([text])
-        names = vectorizer.get_feature_names_out()
         contributions = [(names[i], float(v * coef[i])) for i, v in zip(row.indices, row.data)]
         contributions.sort(key=lambda item: -abs(item[1]))
         return [{'term': t, 'weight': round(w, 3)} for t, w in contributions[:top]]
@@ -98,9 +109,10 @@ def create_app(models_provider=default_models, rate_limit=RATE_LIMIT_PER_MINUTE,
     hits = defaultdict(deque)   # client address -> timestamps of requests inside the window (in-memory, per process)
 
     def client_address(request):
-        # Behind Render's proxy the real client is the first X-Forwarded-For hop.
+        # Render's proxy appends the address it saw, so the real client is the LAST X-Forwarded-For hop.
+        # The first hop is whatever the client sent: trusting it let anyone dodge the rate limit.
         forwarded = request.headers.get('x-forwarded-for', '')
-        return forwarded.split(',')[0].strip() or (request.client.host if request.client else 'unknown')
+        return forwarded.split(',')[-1].strip() or (request.client.host if request.client else 'unknown')
 
     @app.middleware('http')
     async def limits(request, call_next):
