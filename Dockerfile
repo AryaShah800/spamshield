@@ -3,7 +3,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
 COPY requirements-serve.txt .
 RUN pip install -r requirements-serve.txt
-COPY spam_api.py spamshield.py benchmark.py ./
+COPY spam_api.py spamshield.py perturbations.py ./
 COPY static ./static
 COPY models/spamshield_svm.joblib ./models/spamshield_svm.joblib
 RUN useradd --system --no-create-home app

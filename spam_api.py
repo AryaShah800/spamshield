@@ -24,6 +24,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
+from perturbations import PERTURBATIONS
+
 ROOT = Path(__file__).resolve().parent
 MAX_CHARS = 1000
 MAX_BODY_BYTES = 8 * 1024        # 1000 chars of JSON-escaped unicode fits comfortably; anything larger is rejected unread
@@ -163,7 +165,6 @@ def create_app(models_provider=default_models, rate_limit=RATE_LIMIT_PER_MINUTE,
 
     @app.post('/probe')
     def probe(body: Message):
-        from benchmark import PERTURBATIONS
         m, text = models(), body.message
         variants = {'original': text, **{name: fn(text) for name, fn in PERTURBATIONS.items()}}
         names, texts = list(variants), list(variants.values())
