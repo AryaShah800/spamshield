@@ -4,6 +4,7 @@
 """
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 from pathlib import Path
@@ -23,8 +24,9 @@ def main(out, port=8013):
                 break
             except OSError:
                 time.sleep(1)
-        with sync_playwright() as p:
-            ctx = p.chromium.launch_persistent_context('D:/work/_cache/edge-aiml-sp', channel='msedge', headless=True,
+        # A throwaway browser profile, so the script runs on any machine (it used a fixed D:/work path).
+        with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='spamshield-shot-') as profile:
+            ctx = p.chromium.launch_persistent_context(profile, channel='msedge', headless=True,
                                                        viewport={'width': 1100, 'height': 900})
             page = ctx.new_page()
             page.goto(f'http://127.0.0.1:{port}/')
