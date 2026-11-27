@@ -1,10 +1,11 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SpamShield</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2 4 7v8c0 7.5 5 13 12 15 7-2 12-7.5 12-15V7z' fill='%23f5a524'/%3E%3C/svg%3E">
 <style>
 :root{--bg:#0f1317;--panel:#171d23;--line:#27313a;--text:#e9edf1;--muted:#8d9aa7;--spam:#f5a524;--ham:#35c4a8;--mono:ui-monospace,Consolas,monospace;--sans:system-ui,"Segoe UI",Roboto,sans-serif}
 @media (prefers-color-scheme:light){:root{--bg:#f4f6f8;--panel:#fff;--line:#d9e0e6;--text:#16202a;--muted:#5b6876;--spam:#b86e00;--ham:#0b7f6b}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 var(--sans)}
+*{box-sizing:border-box}a{color:var(--ham)}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 var(--sans)}
 .wrap{max-width:1000px;margin:0 auto;padding:2.2rem 1.25rem 4rem}
 h1{font-size:1.9rem;margin:0;letter-spacing:-.02em}h1 span{color:var(--spam)}
 .sub{color:var(--muted);margin:.3rem 0 1.6rem;max-width:62ch}
@@ -32,7 +33,7 @@ td.t{font-family:var(--mono);font-size:.78rem;max-width:20rem;overflow-wrap:anyw
 </style></head>
 <body><div class="wrap">
 <h1>Spam<span>Shield</span></h1>
-<p class="sub">Paste an SMS. A character n-gram SVM (the shipped model) scores it, and a fine-tuned MiniLM transformer, when installed, gives a second opinion, then you can see how easily a spammer's formatting tricks change the scores.</p>
+<p class="sub">Paste an SMS. A character n-gram SVM (the shipped model) scores it, and a fine-tuned MiniLM transformer, when installed, gives a second opinion, then you can see how easily a spammer's formatting tricks change the scores. <a href="/docs">API docs</a></p>
 <div class="grid">
 <section class="card"><label for="msg">Message</label><textarea id="msg" maxlength="1000" placeholder="Type or paste a text message"></textarea>
 <div class="row"><button class="go" id="go">Check message</button><button class="ex" data-t="WINNER!! As a valued network customer you have been selected to receive a 900 prize reward! To claim call 09061701461. Claim code KL341. Valid 12 hours only.">spam example</button><button class="ex" data-t="Hey, are we still meeting at 6 near the station? I will bring the notes from class.">ham example</button></div>
